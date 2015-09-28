@@ -2,7 +2,7 @@ module DatabaseRewinder
   class Cleaner
     attr_accessor :config, :connection_name, :only, :except, :inserted_tables, :pool
 
-    def initialize(config: nil, connection_name: nil, only: nil, except: nil)
+    def initialize(config = nil, connection_name = nil, only = nil, except = nil)
       @config, @connection_name, @only, @except = config, connection_name, Array(only), Array(except)
       reset
     end
@@ -65,4 +65,4 @@ module DatabaseRewinder
   end
 end
 
-require_relative 'compatibility'
+#require_relative 'compatibility'

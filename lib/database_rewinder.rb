@@ -18,7 +18,7 @@ module DatabaseRewinder
     def create_cleaner(connection_name)
       config = database_configuration[connection_name] or raise %Q[Database configuration named "#{connection_name}" is not configured.]
 
-      Cleaner.new(config: config, connection_name: connection_name, only: @only, except: @except).tap {|c| @cleaners << c}
+      Cleaner.new(config, connection_name, @only, @except).tap {|c| @cleaners << c}
     end
 
     # In order to add another database to cleanup, you can give its connection name in on of the forms below:
@@ -51,17 +51,7 @@ module DatabaseRewinder
     end
 
     def record_inserted_table(connection, sql)
-      config = connection.instance_variable_get(:'@config')
-      database = config[:database]
-      #NOTE What's the best way to get the app dir besides Rails.root? I know Dir.pwd here might not be the right solution, but it should work in most cases...
-      root_dir = defined?(Rails) ? Rails.root : Dir.pwd
-      cleaner = cleaners.detect do |c|
-        if (config[:adapter] == 'sqlite3') && (config[:database] != ':memory:')
-          File.expand_path(c.db, root_dir) == File.expand_path(database, root_dir)
-        else
-          c.db == database
-        end
-      end or return
+      cleaner = cleaner_for_connection(connection.instance_variable_get(:'@config')) or return
 
       match = sql.match(/\AINSERT(?:\s+IGNORE)?\s+INTO\s+(?:\.*[`"]?([^.\s`"]+)[`"]?)*/i)
       return unless match
@@ -70,6 +60,27 @@ module DatabaseRewinder
       if table
         cleaner.inserted_tables << table unless cleaner.inserted_tables.include? table
         cleaner.pool ||= connection.pool
+      end
+    end
+
+    def record_manual_table(connection, table)
+      cleaner = cleaner_for_connection(connection) or return
+
+      cleaner.inserted_tables << table unless cleaner.inserted_tables.include? table
+      cleaner.pool ||= connection.pool
+    end
+
+    def cleaner_for_connection(config)
+      database = config[:database]
+      #NOTE What's the best way to get the app dir besides Rails.root? I know Dir.pwd here might not be the right solution, but it should work in most cases...
+      root_dir = defined?(Rails) ? Rails.root : Dir.pwd
+
+      cleaners.detect do |c|
+        if (config[:adapter] == 'sqlite3') && (config[:database] != ':memory:')
+          File.expand_path(c.db, root_dir) == File.expand_path(database, root_dir)
+        else
+          c.db == database
+        end
       end
     end
 
