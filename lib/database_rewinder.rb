@@ -9,6 +9,11 @@ module DatabaseRewinder
 
     def init
       @cleaners, @table_names_cache, @clean_all, @only, @except, @database_configuration = [], {}, false
+      @listening = false
+    end
+
+    def start
+      @listening = true
     end
 
     def database_configuration
@@ -51,6 +56,7 @@ module DatabaseRewinder
     end
 
     def record_inserted_table(connection, sql)
+      return unless @listening
       cleaner = cleaner_for_connection(connection.instance_variable_get(:'@config')) or return
 
       match = sql.match(/\AINSERT(?:\s+IGNORE)?\s+INTO\s+(?:\.*[`"]?([^.\s`"]+)[`"]?)*/i)
@@ -58,15 +64,16 @@ module DatabaseRewinder
 
       table = match[1]
       if table
-        cleaner.inserted_tables << table unless cleaner.inserted_tables.include? table
+        cleaner.inserted_tables << table
         cleaner.pool ||= connection.pool
       end
     end
 
     def record_manual_table(connection, table)
+      return unless @listening
       cleaner = cleaner_for_connection(connection) or return
 
-      cleaner.inserted_tables << table unless cleaner.inserted_tables.include? table
+      cleaner.inserted_tables << table
       cleaner.pool ||= connection.pool
     end
 
@@ -85,6 +92,7 @@ module DatabaseRewinder
     end
 
     def clean
+      @listening = false
       if @clean_all
         clean_all
       else
@@ -93,13 +101,14 @@ module DatabaseRewinder
     end
 
     def clean_all
+      @listening = false
       cleaners.each(&:clean_all)
     end
 
     # cache AR connection.tables
     def all_table_names(connection)
       db = connection.pool.spec.config[:database]
-      @table_names_cache[db] ||= connection.tables.reject{|t| t == ActiveRecord::Migrator.schema_migrations_table_name }
+      @table_names_cache[db] ||= Set.new connection.tables.reject{|t| t == ActiveRecord::Migrator.schema_migrations_table_name }
     end
   end
 end

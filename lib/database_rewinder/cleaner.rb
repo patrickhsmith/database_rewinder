@@ -52,7 +52,7 @@ module DatabaseRewinder
     end
 
     def reset
-      @inserted_tables = []
+      @inserted_tables = Set.new
     end
 
     def with_automatic_reconnect(pool)
